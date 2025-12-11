@@ -1,9 +1,13 @@
 #+Title: Emacs Config
 #+Author: jlindsey
 #+Description: My init.el
-#+PROPERTY: header-args:emacs-lisp :tangle ./init.el :mkdirp yes :comments both
+#+PROPERTY: header-args:emacs-lisp :tangle ./init.el :mkdirp yes :comments no
 #+Startup: showeverything
 #+Options: toc:3
+
+#+begin_src emacs-lisp
+    ;;; init.el -- tangled from init.org -*- lexical-binding: t -*-
+#+end_src
 
 *  Contents :toc_3:
 - [[#intro][Intro]]
@@ -144,7 +148,7 @@ Configure baseline Emacs defaults.
 
 ** Savehist
 Persists various selection and file histories to a file, to be restored on startup. Core Emacs built-in, but must be
-used and enabled. By default, saves to ~~/.config/emacs/history~.
+used and enabled. By default, saves to ~$HOME/.config/emacs/history~.
 
 #+begin_src emacs-lisp
     (use-package savehist
@@ -219,8 +223,8 @@ about. Note that this means you need to update this list whenever a package is a
 
 * Keybinds
 This config uses ~general~ for keybind management because:
-        + I prefer the doom/spacemacs single leader key style, and it makes this easy to set up
-~       + It supports using ~use-package~ to set up keys at the point where they are most relevent
++ I prefer the doom/spacemacs single leader key style, and it makes this easy to set up
++ It supports using ~use-package~ to set up keys at the point where they are most relevent
           
 Given that second point, only keys which aren't associated with a particular package should be set here. Things like
 window split management and movement, quitting/restarting, etc. Package-specific bindings should use the ~:general~ form
@@ -736,9 +740,12 @@ Automatically trim whitespace from edited lines:
 
 
 * Performance and Finalize
+Make GC pauses faster by decreasing the threshold (undoing what we did at the very beginning).
 #+begin_src emacs-lisp
-    ;; Make gc pauses faster by decreasing the threshold.
     (setq gc-cons-threshold (* 2 1000 1000))
-    ;; Increase the amount of data which Emacs reads from the process
+#+end_src
+
+Increase the max amount of data which Emacs reads from the process, leading to slightly less IO churn.
+#+begin_src emacs-lisp
     (setq read-process-output-max (* 1024 1024)) ;; 1mb
 #+end_src
