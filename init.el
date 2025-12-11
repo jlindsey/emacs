@@ -719,3 +719,12 @@
 (use-package ws-butler
   :hook (prog-mode . ws-butler-mode))
 ;; Misc:2 ends here
+
+;; Performance and Finalize
+
+;; [[file:init.org::*Performance and Finalize][Performance and Finalize:1]]
+;; Make gc pauses faster by decreasing the threshold.
+(setq gc-cons-threshold (* 2 1000 1000))
+;; Increase the amount of data which Emacs reads from the process
+(setq read-process-output-max (* 1024 1024)) ;; 1mb
+;; Performance and Finalize:1 ends here

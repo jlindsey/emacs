@@ -38,6 +38,7 @@
 - [[#languages][Languages]]
   - [[#markdown][Markdown]]
 - [[#misc-1][Misc]]
+- [[#performance-and-finalize][Performance and Finalize]]
 
 * Intro
 This config is written in Org Babel with a literate style to make it easier to navigate and annotate. The "real" init is
@@ -733,3 +734,11 @@ Automatically trim whitespace from edited lines:
       :hook (prog-mode . ws-butler-mode))
 #+end_src
 
+
+* Performance and Finalize
+#+begin_src emacs-lisp
+    ;; Make gc pauses faster by decreasing the threshold.
+    (setq gc-cons-threshold (* 2 1000 1000))
+    ;; Increase the amount of data which Emacs reads from the process
+    (setq read-process-output-max (* 1024 1024)) ;; 1mb
+#+end_src
