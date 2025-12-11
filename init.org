@@ -1,0 +1,735 @@
+#+Title: Emacs Config
+#+Author: jlindsey
+#+Description: My init.el
+#+PROPERTY: header-args:emacs-lisp :tangle ./init.el :mkdirp yes :comments both
+#+Startup: showeverything
+#+Options: toc:3
+
+*  Contents :toc_3:
+- [[#intro][Intro]]
+- [[#core-setup][Core Setup]]
+  - [[#auto-tangle-hook][Auto-tangle Hook]]
+  - [[#package-manager][Package manager]]
+    - [[#repos][Repos]]
+  - [[#emacs-defaults][Emacs Defaults]]
+  - [[#savehist][Savehist]]
+  - [[#evil][Evil]]
+- [[#keybinds][Keybinds]]
+- [[#org][Org]]
+- [[#ui][UI]]
+  - [[#theme][Theme]]
+  - [[#modeline][Modeline]]
+  - [[#nerd-icons][Nerd Icons]]
+  - [[#dashboard][Dashboard]]
+  - [[#popup-management][Popup Management]]
+    - [[#shackle][Shackle]]
+    - [[#popper][Popper]]
+    - [[#solaire][Solaire]]
+  - [[#misc][Misc]]
+- [[#project-management][Project Management]]
+  - [[#treemacs][Treemacs]]
+- [[#completion][Completion]]
+  - [[#corfu][Corfu]]
+  - [[#cape][Cape]]
+  - [[#vertico][Vertico]]
+    - [[#marginalia][Marginalia]]
+  - [[#consult][Consult]]
+  - [[#orderless][Orderless]]
+- [[#languages][Languages]]
+  - [[#markdown][Markdown]]
+- [[#misc-1][Misc]]
+
+* Intro
+This config is written in Org Babel with a literate style to make it easier to navigate and annotate. The "real" init is
+therefore in ~init.org~ and you should avoid editing the derived ~init.el~ directly. A hook is provided to automatically
+tangle the code blocks into ~init.el~ on save. If you need (for example on an error that prevents the hook) you can
+manually tangle with ~C-c C-v t~.
+
+At a high level: I use ~evil-mode~ exclusively, and prefer a non-chorded interaction style a la Doom and
+Spacemacs. IDE-like features are mainly drawn from LSP mode, with Corfu/Vertico/Cape used for autocomplete.
+
+Much inspiration taken from:
++ https://github.com/MiniApollo/kickstart.emacs
++ https://github.com/doomemacs/doomemacs
++ https://www.spacemacs.org/ 
+
+* Core Setup
+Make startup faster by reducing the frequency of garbage collection. This will be set back when startup finishes.
+#+begin_src emacs-lisp
+    ;; The default is 800 kilobytes. Measured in bytes.
+    (setq gc-cons-threshold (* 50 1000 1000))
+#+end_src
+
+** Auto-tangle Hook
+#+begin_src emacs-lisp
+    (defun start/org-babel-tangle-config ()
+      "Automatically tangle our init.org config file"
+      (interactive)
+      (when (string-equal (file-name-directory (buffer-file-name))
+                          (expand-file-name user-emacs-directory))
+        (let ((org-confirm-babel-evaluate nil))
+          (org-babel-tangle))))
+
+    (add-hook 'org-mode-hook (lambda () (add-hook 'after-save-hook #'start/org-babel-tangle-config)))
+#+end_src
+
+** Package manager
+I use ~straight.el~, which is setup in ~early-init.el~. That config shouldn't really be changed. It's configured to
+disable ~package.el~ and use normal ~use-package~ forms (without needing ~:straight~ keys).
+
+*** Repos
+Even though we don't use ~package.el~ and straight ignores this, it's useful to set so you can still do ~M-x install-package~.
+
+#+begin_src emacs-lisp
+    (setq package-archives '(("melpa" . "https://melpa.org/packages/")
+                             ("org" . "https://orgmode.org/elpa/")
+                             ("elpa" . "https://elpa.gnu.org/packages/")
+                             ("nongnu" . "https://elpa.nongnu.org/nongnu/")))
+#+end_src
+
+** Emacs Defaults
+Configure baseline Emacs defaults.
+
+#+begin_src emacs-lisp
+    (use-package emacs
+      :custom
+    	;; Enable these for Vertico
+      (context-menu-mode t)
+      (enable-recursive-minibuffers t)
+
+    	;; Turn off all the window chrome
+      (menu-bar-mode nil)
+      (scroll-bar-mode nil)
+      (tool-bar-mode nil)
+
+      (delete-selection-mode t)
+      (electric-indent-mode t)
+      (electric-pair-mode nil)
+
+      (blink-cursor-mode nil)
+      (global-auto-revert-mode t)
+
+      (fill-column 120) ;; Using evil's Vgq to format paragraphs, wrap on col 120
+      (tab-width 4)
+      (line-spacing 0.12)
+
+      (make-backup-files nil) ;; Do not make ~ files
+      (auto-save-default nil) ;; Do not make # files
+
+      ;; Hide commands in M-x which do not work in the current mode.
+      (read-extended-command-predicate #'command-completion-default-include-p)
+      ;; Do not allow the cursor in the minibuffer prompt
+      (minibuffer-prompt-properties '(readonly t cursor-intangible t face minibuffer-prompt))
+
+      :config
+      (set-face-attribute
+       'default nil
+       :family "Hack"
+       :height 125
+       :weight 'medium)
+
+      :hook
+      ; hide minor modes
+      (prog-mode . (lambda () (hs-minor-mode t)))
+      
+      ; enable line numbers but not globally
+      (prog-mode . display-line-numbers-mode)
+      (text-mode . display-line-numbers-mode)
+      (conf-mode . display-line-numbers-mode)
+
+      :bind
+      (([escape] . keyboard-escape-quit)))
+    #+end_src
+
+** Savehist
+Persists various selection and file histories to a file, to be restored on startup. Core Emacs built-in, but must be
+used and enabled. By default, saves to ~~/.config/emacs/history~.
+
+#+begin_src emacs-lisp
+    (use-package savehist
+      :ensure nil
+      :init (savehist-mode))
+#+end_src
+
+** Evil
+Setup Evil mode and associated plugins.
+#+begin_src emacs-lisp
+    (use-package evil
+      :init
+      (evil-mode)
+      :custom
+      (evil-want-keybinding nil)
+      (evil-want-C-u-scroll t)
+      (evil-want-C-i-jump nil)
+      (evil-undo-system 'undo-redo)
+      (evil-visual-update-x-selection-p nil)
+      :config
+      (add-hook 'after-change-major-mode-hook (lambda () (setq-local evil-shift-width tab-width))))
+#+end_src
+
+Include ~evil-collection~, which is a set of keymaps and bindings for special buffer types like ~help-mode~ and
+~dired~. I set it up as an explicit whitelist rather than letting it default to trying to remap everything it knows
+about. Note that this means you need to update this list whenever a package is added with a new mode.
+#+begin_src emacs-lisp
+    (use-package evil-collection
+      :after evil
+      :config
+      (setq evil-collection-mode-list '(dired ibuffer magit corfu vertico consult info
+    										  help helpful compilation flycheck))
+      (evil-collection-init))
+#+end_src
+
+~evil-surround~ is a port of tpope's ~vim-surround~ which provides mappings to easily surround a text object with pairs of quotes, parens, brackets, etc.
+#+begin_src emacs-lisp
+    (use-package evil-surround
+      :after evil
+      :config (global-evil-surround-mode 1))
+#+end_src
+
+~evil-lion~ ports ~vim-lion~, for easy line alignment motions.
+#+begin_src emacs-lisp
+    (use-package evil-lion
+      :after evil
+      :config (evil-lion-mode))
+#+end_src
+
+~evil-escape~ universalizes escaping in all types of buffers. I bind it to ~C-g~ as a global "cancel".
+#+begin_src emacs-lisp
+    (use-package evil-escape
+      :after evil
+      :custom
+      (evil-escape-excluded-states '(normal visual multiedit emacs motion))
+      (evil-escape-excluded-major-modes '(treemacs-mode))
+      (evil-escape-key-sequence nil)
+      (evil-escape-delay 0.15)
+      :init
+      (evil-escape-mode)
+      (evil-define-key* '(insert replace visual operator) 'global "\C-g" #'evil-escape)
+      :config
+      ;; `evil-escape' in the minibuffer is more disruptive than helpful. That is,
+      ;; unless we have `evil-collection-setup-minibuffer' enabled, in which case we
+      ;; want the same behavior in insert mode as we do in normal buffers.
+      (add-hook 'evil-escape-inhibit-functions
+    			(defun my/evil-inhibit-escape-in-minibuffer-fn ()
+    			  (and (minibufferp)
+    				   (or (not (bound-and-true-p evil-collection-setup-minibuffer))
+    					   (evil-normal-state-p))))))
+#+end_src
+
+* Keybinds
+This config uses ~general~ for keybind management because:
+        + I prefer the doom/spacemacs single leader key style, and it makes this easy to set up
+~       + It supports using ~use-package~ to set up keys at the point where they are most relevent
+          
+Given that second point, only keys which aren't associated with a particular package should be set here. Things like
+window split management and movement, quitting/restarting, etc. Package-specific bindings should use the ~:general~ form
+in ~use-package~.
+
+#+begin_src emacs-lisp
+    (use-package general
+      :custom
+      (general-use-package-emit-autoloads t)
+      :config
+      (general-evil-setup)
+      
+      (general-define-key
+       :states '(visual)
+       "s-/" 'comment-or-uncomment-region)
+
+      (general-define-key
+       :states '(normal)
+       "s-/" 'comment-line)
+
+      (general-create-definer start/leader-keys
+    	:states '(normal emacs)
+    	:keymaps 'override
+    	:prefix "SPC"
+    	:global-prefix "SPC")
+
+      (general-create-definer start/mode-leader
+    	:states '(normal emacs)
+    	:keymaps 'override
+    	:prefix "SPC m"
+    	:global-prefix "SPC m")
+      
+      (start/leader-keys
+    	"SPC" '(project-find-file :wk "Find file")
+    	":" '(execute-extended-command :wk "M-x"))
+      
+      (start/leader-keys
+    	"b" '(:ignore t :wk "Buffers")
+    	"b i" '(ibuffer :wk "ibuffer")
+    	"b d" '(evil-delete-buffer :wk "Delete buffer"))
+      
+      (start/leader-keys
+    	"C" '(:ignore t :wk "Configs")
+    	"C i" '((lambda () (interactive) (find-file "~/.config/emacs/init.el")) :wk "Edit init.el")
+    	"C e" '((lambda () (interactive) (find-file "~/.config/emacs/early-init.el")) :wk "Edit early-init.el")
+    	"C r" '((lambda () (interactive) (load-file "~/.config/emacs/init.el")) :wk "Reload init.el"))
+
+      (start/leader-keys
+    	"q" '(:ignore t :wk "Quit")
+    	"q r" '(restart-emacs :wk "Restart")
+    	"q q" '(evil-quit-all :wk "Quit All"))
+      
+      (start/leader-keys
+    	"w" '(:ignore t :wk "Windows / Splits")
+    	"w s" 'evil-window-split
+    	"w v" 'evil-window-vsplit
+    	"w S" 'evil-window-new
+    	"w V" 'evil-window-vnew
+    	"w h" 'evil-window-left
+    	"w j" 'evil-window-down
+    	"w k" 'evil-window-up
+    	"w l" 'evil-window-right
+    	"w H" 'evil-window-move-far-left
+    	"w J" 'evil-window-move-very-bottom
+    	"w K" 'evil-window-move-very-top
+    	"w L" 'evil-window-move-far-right)
+      )
+#+end_src
+
+Also included in this section is ~which-key~, a built-in package (as of 30) that displays a list of keybindings along
+the bottom in the minibuffer after a short delay when you start a chord or leader sequence.
+#+begin_src emacs-lisp
+    (use-package which-key
+      :ensure nil
+      :init (which-key-mode 1)
+      :custom
+      (which-key-side-window-location 'bottom)
+      (which-key-sort-order #'which-key-key-order-alpha)
+      (which-key-sort-uppercase-first nil)
+      (which-key-add-column-padding 1)
+      (which-key-min-display-lines 6)
+      (which-key-idle-delay 0.5)
+      (which-key-max-description-length 35)
+      (which-key-allow-imprecise-window-fit nil))
+#+end_src
+
+* Org
+I don't use Org mode much except for this config, so just set up a couple simple packages and configs here.
+
+#+begin_src emacs-lisp
+(use-package org
+  :ensure nil
+  :custom
+  (org-edit-src-content-indentation 4)
+  (org-return-follows-link t)
+  :hook (org-mode . org-indent-mode))
+
+(use-package toc-org
+  :commands toc-org-enable
+  :hook (org-mode . toc-org-mode))
+
+(use-package org-superstar
+  :after org
+  :hook (org-mode . org-superstar-mode))
+#+end_src
+
+* UI
+Various UI customizations like theme, modeline, etc
+
+** Theme
+Use ~doom-themes~, which is a theme collection package. Nice to be able to switch sometimes.
+
+#+begin_src emacs-lisp
+    (use-package doom-themes
+      :custom
+      (doom-themes-enable-bold t)
+      (doom-themes-enable-italic t)
+      (doom-themes-treemacs-theme "doom-colors")
+      :config
+      (load-theme 'doom-material t)
+      (doom-themes-visual-bell-config)
+      (doom-themes-treemacs-config))
+#+end_src
+
+** Modeline
+Use ~doom-modeline~ instead of the default, which is minimal enough while still having lots of functionality and interop
+with other packages like Flycheck and LSP.
+
+#+begin_src emacs-lisp
+    (use-package doom-modeline
+      :custom
+      (doom-modeline-height 25)
+      :hook (after-init . doom-modeline-mode))
+#+end_src
+
+** Nerd Icons
+Use Nerd Icons everywhere we can. Here is where we put the base ~nerd-icons~ package as well as the integrations with
+core modes like Dired and Ibuffer. Integrations with other packages like Treemacs and Corfu are in those sections.
+
+#+begin_src emacs-lisp
+    (use-package nerd-icons
+      :if (display-graphic-p))
+
+    (use-package nerd-icons-dired
+      :hook (dired-mode . (lambda () (nerd-icons-dired-mode t))))
+
+    (use-package nerd-icons-ibuffer
+      :hook (ibuffer-mode . nerd-icons-ibuffer-mode))
+#+end_src
+
+** Dashboard
+A nice startup screen showing recent files, projects, etc.
+
+#+begin_src emacs-lisp
+    (use-package dashboard
+      :custom
+      (dashboard-startup-banner 'logo)
+      (dashboard-projects-backed 'project-el)
+      (dashboard-center-content t)
+      (dashboard-vertically-center-content t)
+      (dashboard-navigation-cycle t)
+      (dashboard-display-icons t)
+      (dashboard-icon-type 'nerd-icons)
+      (dashboard-set-heading-icons t)
+      (dashboard-set-file-icons t)
+      :config (dashboard-setup-startup-hook))
+#+end_src
+
+** Popup Management
+Emacs makes lots of different windows and buffer types that are essentially ephemeral: ~helpful-mode~, Flycheck,
+Warnings, Messages, etc. The packages and configs here help to manage them in a less annoying way.
+
+*** Shackle
+Set rules for how these kinds of windows are displayed: size, position alignment, whether they steal focus, etc.
+
+#+begin_src emacs-lisp
+    (use-package shackle
+      :config
+      (setq shackle-rules
+            '(
+              (("\\*Help\\*" helpful-mode) :align right :size 0.35 :select nil)
+
+    		  ("\\*compilation\\*" :align below :size 0.25 :noselect t)
+    		  (("\\*Flycheck errors\\*" flycheck-error-list-mode) :align below :size 0.25 :select t)
+    		  (("\\*Warnings\\*" special-mode) :align below :size 0.2 :select nil)
+
+    		  (("\\*Treemacs\\*" treemacs-mode) :align left :size 0.15 :select t)
+    		  
+    		  ("\\*Messages\\*" :align below :size 0.3 :select nil)
+    		  ("\\*Backtrace\\*" :align below :size 0.3 :select t))
+    		)
+      (shackle-mode 1))
+#+end_src
+
+*** Popper
+Manager for "popup" windows. Matching window names or buffer modes are treated as inferior, easily dismissable, and
+toggleable. You can cycle through these kinds of windows, list them all, group them by project, etc.
+
+#+begin_src emacs-lisp
+    (use-package popper
+      :custom
+      (popper-display-control nil)
+      (popper-group-function #'popper-group-by-project)
+      (popper-mode-line nil)
+
+      :init
+      (setq popper-reference-buffers
+            '("\\*Messages\\*"
+              "\\*Warnings\\*"
+              "Output\\*$"
+              "\\*Async Shell Command\\*"
+              "\\*Flycheck errors\\*"
+              "\\*helpful.*\\*"
+              "\\*Treemacs\\*"
+              special-mode
+              treemacs-mode
+              help-mode
+              compilation-mode))
+
+      :config
+      (popper-mode +1)
+      (popper-echo-mode +1)
+
+      (defun my/quit-popup-or-default ()
+        "Quit popup window if in a popup, otherwise run normal quit-window"
+        (interactive)
+        (if (and (bound-and-true-p popper-popup-status)
+                         (popper-popup-p (current-buffer)))
+                (popper-toggle)
+          (quit-window)))
+
+      (defun my/keyboard-quit-or-toggle-popup ()
+    	"Toggle popup if in one, otherwise run keyboard-quit"
+    	(interactive)
+    	(if (and (bound-and-true-p popper-popup-status)
+    			 (popper-popup-p (current-buffer)))
+    		(popper-toggle)
+    	  (keyboard-quit)))
+
+      :general
+      ;; (general-define-key
+      ;;  :states '(motion)
+      ;;  :keymaps '(help-mode-map helpful-mode-map compilation-mode-map flycheck-error-list-mode-map)
+      ;;  "q" 'my/quit-popup-window-or-default)
+
+      ;; Fix: Make C-g work in popups
+      ;; (general-define-key
+      ;;  :states '(normal insert visual emacs)
+      ;;  :keymaps 'override
+      ;;  "C-g" 'my/keyboard-quit-or-toggle-popup)
+
+      (start/leader-keys
+    	"w q" 'popper-kill-latest-popup
+    	"w p" 'popper-toggle
+    	"w TAB" 'popper-cycle))
+#+end_src
+
+
+*** Solaire
+De-emphasize these kinds of windows by dimming their background.
+#+begin_src emacs-lisp
+    (use-package solaire-mode
+      :hook (after-init . solaire-global-mode))
+#+end_src
+
+
+** Misc
+Several minor UI packages that don't need their own TOC heading.
+
+Highlight the current line:
+#+begin_src emacs-lisp
+    (use-package hl-line
+      :hook (after-init . global-hl-line-mode))
+#+end_src
+
+Display page breaks as <hr>-style lines (used in Dashboard):
+#+begin_src emacs-lisp
+    (use-package page-break-lines
+      :init (page-break-lines-mode))
+#+end_src
+
+On Mac, make the title bar match the current theme:
+#+begin_src emacs-lisp
+    (use-package ns-auto-titlebar
+      :if (eq system-type 'darwin)
+      :init (ns-auto-titlebar-mode +1))
+#+end_src
+
+* Project Management
+For now, use ~project.el~ for project management, with a few plugins for interop.
+
+#+begin_src emacs-lisp
+    (use-package project
+      :ensure nil
+      :defer t
+      :init
+      (setq project-list-file (file-name-concat
+    						   (file-name-parent-directory user-init-file)
+    						   "projects")))
+#+end_src
+
+Separate ibuffer lists into projects.
+#+begin_src emacs-lisp
+    (use-package ibuffer-project
+      :init
+      (defun my/ibuffer-project-filter-predicate ()
+    	(setq ibuffer-filter-groups (ibuffer-project-generate-filter-groups))
+    	(unless (eq ibuffer-sorting-mode 'project-file-relative)
+    	  (ibuffer-do-sort-by-project-file-relative)))
+      :hook (ibuffer . my/ibuffer-project-filter-predicate))
+#+end_src
+
+** Treemacs
+Having a top-down filesystem view of your project is handy. We use a couple different plugins for this.
+
+Note that ~project.el~ compatibility is built-in; the ~project-treemacs~ project on MELPA uses Treemacs for project root
+definitions and only works while the Treemacs buffer is open; not a great UX.
+
+#+begin_src emacs-lisp
+    (use-package treemacs
+      :custom
+      (treemacs-width 30)
+      (treemacs-follow-after-init t)
+      (treemacs-sotring 'alphabetic-case-insensitive-asc)
+      (treemacs-indent-guide-style 'line)
+      :config
+      (treemacs-project-follow-mode t)
+      (treemacs-fringe-indicator-mode 'always)
+      (treemacs-git-mode 'deferred)
+      (treemacs-git-commit-diff-mode t)
+      (treemacs-indent-guide-mode t))
+#+end_src
+   
+Evil integration plugin
+#+begin_src emacs-lisp
+    (use-package treemacs-evil
+      :after treemacs)
+#+end_src
+
+Add icons to the file lists
+#+begin_src emacs-lisp
+    (use-package treemacs-nerd-icons
+      :after treemacs
+      :config (treemacs-load-theme 'nerd-icons))
+#+end_src
+
+* Completion
+Packages for auto-complete and CAPF management. In general I use LSP mode for completions in most cases, but with its
+CAPF deferred to Corfu. Vertico is used for minibuffer completion.
+
+There are a lot of different packages managed here and it's not always clear exactly what each thing does: the packages
+here are designed to be minimalst and single-purpose. Contrast this with eg Company, which is both a completion backend
+and a popup UI element. I've tried to leave good descriptions around each one and describe how they work together.
+
+** Corfu
+This is the primary ~completion-at-point~ UI. It calls CAPFs and displays their outputs, allowing you to filter, search,
+and select from them. It does not provide any completion backends on its own. For that we use both Cape and LSP.
+
+#+begin_src emacs-lisp
+    (use-package corfu
+      :init
+      (global-corfu-mode)
+
+      :custom
+      (corfu-cycle t)
+      (corfu-auto t)
+      (corfu-auto-prefix 2)
+      (corfu-popupinfo-enable t)
+      (corfu-popupinfo-delay 0.1)
+      (corfu-preselect 'prompt)
+      (completion-ignore-case t)
+      (text-mode-ispell-word-completion nil)
+      (tab-always-indent 'complete)
+
+      :general
+      (general-define-key
+       :states '(normal insert)
+       "C-SPC" 'completion-at-point))
+#+end_src
+
+Adds nerd-icons to Corfu based on the type of thing being completed (variable, function, file, etc)
+#+begin_src emacs-lisp
+    (use-package nerd-icons-corfu
+      :after corfu
+      :init (add-to-list 'corfu-margin-formatters #'nerd-icons-corfu-formatter))
+#+end_src
+
+** Cape
+Completion-at-point extensions library, which provides both a couple useful built-in CAPFs and several functions to
+compose and transform other CAPFs. Notably includes the ability to adapt company backends to generic CAPFs that Corfu
+can use.
+
+#+begin_src emacs-lisp
+    (use-package cape
+      :after corfu
+      :init
+      (add-hook 'completion-at-point-functions #'cape-dabbrev)
+      (add-hook 'completion-at-point-functions #'cape-dict)
+      (add-hook 'completion-at-point-functions #'cape-file)
+      (add-hook 'completion-at-point-functions #'cape-elisp-block)
+      (add-hook 'completion-at-point-functions #'cape-keyword)
+      :general
+      (start/leader-keys
+        "a" '(cape-prefix-map :wk "Cape")))
+#+end_src
+
+** Vertico
+Whereas Corfu handles ~completion-at-point-functions~, Vertico handles ~completing-read~ (in-buffer vs minibuffer
+completions). Vertico handles things like listing history and candidates for ~M-x~, searching for files with
+~find-file~, etc. Rule of thumb: anything that pops up at the bottom of the screen uses this.
+
+Vertico also interacts with Consult: Vertico is the display, Consult is the backend.
+
+#+begin_src emacs-lisp
+    (use-package vertico
+      :custom
+      (vertico-scroll-margin 5)
+      (vertico-count 15)
+      (vertico-resize nil)
+      (vertico-cycle t)
+      :init
+      (vertico-mode))
+#+end_src
+
+*** Marginalia
+Adds help and descriptions to the right of autocomplete suggestions in Vertico:
+
+#+begin_src emacs-lisp
+    (use-package marginalia
+      :after vertico
+      :bind (:map minibuffer-local-map
+    			  ("M-A" . marginalia-cycle))
+      :init (marginalia-mode))
+#+end_src
+
+Also adds nerd-icons to suggestions based on their type:
+#+begin_src emacs-lisp
+    (use-package nerd-icons-completion
+      :after marginalia
+      :config (nerd-icons-completion-mode)
+      :hook (marginalia-mode . nerd-icons-completion-marginalia-setup))
+#+end_src
+
+** Consult
+Provides a series of ~completing-read~ backends; in other words, it is to Vertico what Cape is to Corfu. Also adds
+descriptions compatible with Marginalia. It has a lot of different functions for things like looking up buffers, listing
+files, finding things (via ~rg~ or ~fd~, or lines within a file, etc). Most of the functions can also be scoped to the
+current project.
+
+#+begin_src emacs-lisp
+    (use-package consult
+      :custom
+      (register-preview-delay 0.3)
+      (register-preview-function #'consult-register-format)
+      (xref-show-xrefs-function #'consult-xref)
+      (xref-show-definitions-function #'consult-xref)
+      :init
+      (advice-add #'register-preview :override #'consult-register-window)
+      :hook
+      (completion-list-mode . consult-preview-at-point-mode)
+      :general
+      (start/leader-keys
+        "s" '(:ignore t :wk "Search")
+        "s b" 'consult-buffer
+        "s r" 'consult-recent-file
+        "s f" 'consult-fd
+        "s g" 'consult-ripgrep
+        "s l" 'consult-line
+        "s i" 'consult-imenu))
+#+end_src
+
+** Orderless
+A better way of searching through completion candidates in both modes. The search pattern is divided into
+space-separated components, and then candidates are matched against them in any order.
+
+#+begin_src emacs-lisp
+    (use-package orderless
+      :custom
+      (completion-styles '(orderless basic))
+      (completion-category-overrides `((file (styles basic partial-completion)))))
+#+end_src
+
+* Languages
+
+** Markdown
+Everybody's favorite README language
+
+#+begin_src emacs-lisp
+    (use-package markdown-mode
+      :mode ("/README\\(?:\\.md\\)?\\'" . gfm-mode)
+      :custom
+      (markdown-italic-underscore t)
+      (markdown-gfm-additional-languages '("sh"))
+      (markdown-make-gfm-checkboxes-buttons t)
+      (markdown-fontify-whole-heading-line t)
+      (markdown-fontify-code-blocks-natively t))
+#+end_src
+
+* Misc
+Various other minor packages that don't fit in the other sections.
+
+Colorize pairs of delimiters (parens, braces, angles, etc):
+#+begin_src emacs-lisp
+    (use-package rainbow-delimiters
+      :hook (prog-mode . rainbow-delimiters-mode))
+#+end_src
+
+Automatically trim whitespace from edited lines:
+#+begin_src emacs-lisp
+    (use-package ws-butler
+      :hook (prog-mode . ws-butler-mode))
+#+end_src
+

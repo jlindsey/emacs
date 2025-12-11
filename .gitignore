@@ -1,0 +1,8 @@
+*
+!.gitignore
+!README.md
+!README.org
+!init.el
+!init.org
+!early-init.el
+!lisp/*
