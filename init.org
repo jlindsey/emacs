@@ -30,6 +30,10 @@
     - [[#popper][Popper]]
     - [[#solaire][Solaire]]
   - [[#misc][Misc]]
+- [[#help][Help]]
+  - [[#helpful][Helpful]]
+  - [[#flycheck][Flycheck]]
+  - [[#which-key][Which-key]]
 - [[#project-management][Project Management]]
   - [[#treemacs][Treemacs]]
 - [[#completion][Completion]]
@@ -37,10 +41,13 @@
   - [[#cape][Cape]]
   - [[#vertico][Vertico]]
     - [[#marginalia][Marginalia]]
+  - [[#yasnippet][Yasnippet]]
   - [[#consult][Consult]]
   - [[#orderless][Orderless]]
+- [[#lsp][LSP]]
 - [[#languages][Languages]]
   - [[#markdown][Markdown]]
+  - [[#go][Go]]
 - [[#misc-1][Misc]]
 - [[#performance-and-finalize][Performance and Finalize]]
 
@@ -294,23 +301,6 @@ in ~use-package~.
       )
 #+end_src
 
-Also included in this section is ~which-key~, a built-in package (as of 30) that displays a list of keybindings along
-the bottom in the minibuffer after a short delay when you start a chord or leader sequence.
-#+begin_src emacs-lisp
-    (use-package which-key
-      :ensure nil
-      :init (which-key-mode 1)
-      :custom
-      (which-key-side-window-location 'bottom)
-      (which-key-sort-order #'which-key-key-order-alpha)
-      (which-key-sort-uppercase-first nil)
-      (which-key-add-column-padding 1)
-      (which-key-min-display-lines 6)
-      (which-key-idle-delay 0.5)
-      (which-key-max-description-length 35)
-      (which-key-allow-imprecise-window-fit nil))
-#+end_src
-
 * Org
 I don't use Org mode much except for this config, so just set up a couple simple packages and configs here.
 
@@ -406,13 +396,12 @@ Set rules for how these kinds of windows are displayed: size, position alignment
       (setq shackle-rules
             '(
               (("\\*Help\\*" helpful-mode) :align right :size 0.35 :select nil)
+    		  (lsp-help-mode :align right :size 0.35 :select nil)
 
     		  ("\\*compilation\\*" :align below :size 0.25 :noselect t)
     		  (("\\*Flycheck errors\\*" flycheck-error-list-mode) :align below :size 0.25 :select t)
     		  (("\\*Warnings\\*" special-mode) :align below :size 0.2 :select nil)
 
-    		  (("\\*Treemacs\\*" treemacs-mode) :align left :size 0.15 :select t)
-    		  
     		  ("\\*Messages\\*" :align below :size 0.3 :select nil)
     		  ("\\*Backtrace\\*" :align below :size 0.3 :select t))
     		)
@@ -438,10 +427,9 @@ toggleable. You can cycle through these kinds of windows, list them all, group t
               "\\*Async Shell Command\\*"
               "\\*Flycheck errors\\*"
               "\\*helpful.*\\*"
-              "\\*Treemacs\\*"
               special-mode
-              treemacs-mode
               help-mode
+    		  lsp-help-mode
               compilation-mode))
 
       :config
@@ -482,14 +470,12 @@ toggleable. You can cycle through these kinds of windows, list them all, group t
     	"w TAB" 'popper-cycle))
 #+end_src
 
-
 *** Solaire
 De-emphasize these kinds of windows by dimming their background.
 #+begin_src emacs-lisp
     (use-package solaire-mode
       :hook (after-init . solaire-global-mode))
 #+end_src
-
 
 ** Misc
 Several minor UI packages that don't need their own TOC heading.
@@ -513,6 +499,53 @@ On Mac, make the title bar match the current theme:
       :init (ns-auto-titlebar-mode +1))
 #+end_src
 
+* Help
+Several packages for use in getting help or otherwise displaying documentation
+
+** Helpful
+Ability to lookup key bindings, Emacs functions, variables, all kinds of things. Along with an enhanced ~help-mode~
+buffer UI.
+
+#+begin_src emacs-lisp
+    (use-package helpful
+      :general
+      (start/leader-keys
+        "h" '(:ignore t :wk "Help")
+        "h h" 'helpful-at-point
+        "h c" 'helpful-command
+        "h f" 'helpful-callable
+        "h k" 'helpful-key
+        "h v" 'helpful-variable))
+#+end_src
+
+** Flycheck
+An alternative to the Emacs-native Flybuild that's a bit more full-featured and has good integration with lsp-mode.
+
+#+begin_src emacs-lisp
+(use-package flycheck
+  :init (global-flycheck-mode))
+#+end_src
+
+** Which-key
+A built-in package (as of 30) that displays a list of keybindings along the bottom in the minibuffer after a short delay
+when you start a chord or leader sequence.
+
+#+begin_src emacs-lisp
+    (use-package which-key
+      :ensure nil
+      :init (which-key-mode 1)
+      :custom
+      (which-key-side-window-location 'bottom)
+      (which-key-sort-order #'which-key-key-order-alpha)
+      (which-key-sort-uppercase-first nil)
+      (which-key-add-column-padding 1)
+      (which-key-min-display-lines 6)
+      (which-key-idle-delay 0.5)
+      (which-key-max-description-length 35)
+      (which-key-allow-imprecise-window-fit nil))
+#+end_src
+
+
 * Project Management
 For now, use ~project.el~ for project management, with a few plugins for interop.
 
@@ -523,7 +556,12 @@ For now, use ~project.el~ for project management, with a few plugins for interop
       :init
       (setq project-list-file (file-name-concat
     						   (file-name-parent-directory user-init-file)
-    						   "projects")))
+    						   "projects"))
+      :general
+      (start/leader-keys
+    	"p" '(:ignore t :wk "Projects")
+    	"p p" 'project-switch-project
+    	"p f" 'project-find-file))
 #+end_src
 
 Separate ibuffer lists into projects.
@@ -550,6 +588,7 @@ definitions and only works while the Treemacs buffer is open; not a great UX.
       (treemacs-follow-after-init t)
       (treemacs-sotring 'alphabetic-case-insensitive-asc)
       (treemacs-indent-guide-style 'line)
+      (treemacs-is-never-other-window t)
       :config
       (treemacs-project-follow-mode t)
       (treemacs-fringe-indicator-mode 'always)
@@ -587,12 +626,15 @@ and select from them. It does not provide any completion backends on its own. Fo
     (use-package corfu
       :init
       (global-corfu-mode)
+      (corfu-popupinfo-mode)
+      (corfu-history-mode)
 
       :custom
       (corfu-cycle t)
       (corfu-auto t)
       (corfu-auto-prefix 2)
-      (corfu-popupinfo-enable t)
+      (corfu-auto-delay 0.1)
+      (corfu-separator ?\s)
       (corfu-popupinfo-delay 0.1)
       (corfu-preselect 'prompt)
       (completion-ignore-case t)
@@ -621,10 +663,7 @@ can use.
     (use-package cape
       :after corfu
       :init
-      (add-hook 'completion-at-point-functions #'cape-dabbrev)
-      (add-hook 'completion-at-point-functions #'cape-dict)
       (add-hook 'completion-at-point-functions #'cape-file)
-      (add-hook 'completion-at-point-functions #'cape-elisp-block)
       (add-hook 'completion-at-point-functions #'cape-keyword)
       :general
       (start/leader-keys
@@ -668,6 +707,29 @@ Also adds nerd-icons to suggestions based on their type:
       :hook (marginalia-mode . nerd-icons-completion-marginalia-setup))
 #+end_src
 
+** Yasnippet
+Framework for creating and inserting templated snippets as completions.
+
+#+begin_src emacs-lisp
+    (use-package yasnippet
+      :after cape
+      :config (yas-global-mode 1))
+#+end_src
+
+The CAPF functionality is a separate package:
+
+#+begin_src emacs-lisp
+    (use-package yasnippet-capf
+      :after (cape lsp))
+#+end_src
+
+Install the omnibus library of different premade snippets:
+#+begin_src emacs-lisp
+    (use-package yasnippet-snippets
+      :after yasnippet
+      :config (yas-reload-all))
+#+end_src
+
 ** Consult
 Provides a series of ~completing-read~ backends; in other words, it is to Vertico what Cape is to Corfu. Also adds
 descriptions compatible with Marginalia. It has a lot of different functions for things like looking up buffers, listing
@@ -707,7 +769,59 @@ space-separated components, and then candidates are matched against them in any 
       (completion-category-overrides `((file (styles basic partial-completion)))))
 #+end_src
 
+* LSP
+I used to use Eglot but switched to LSP mode for two specific reasons:
++ I want the ability to run multiple servers per buffer / file type (eg. running both ~pyright~ and ~ruff~ in Python)
++ LSP mode has better integration with several things like Treemacs
+
+LSP mode brings along its own autocomplete UI that will compete with Corfu unless disabled; you also need to write a
+small glue function to get them to talk nicely to one another.
+
+Note that ~(lsp-mode)~ isn't called here. I prefer to have the individual languages set their own hooks.
+
+#+begin_src emacs-lisp
+    (use-package lsp-mode
+      :custom
+      (lsp-completion-provider :none)
+      (lsp-completion-enable t)
+      (lsp-completion-default-behavior :insert)
+      :hook
+      ((lsp-mode . lsp-enable-which-key-integration)
+       (lsp-completion-mode . my/lsp-mode-setup-completion))
+      :init
+      (defun my/lsp-mode-setup-completion ()
+        (setf (alist-get 'styles (alist-get 'lsp-capf completion-category-defaults))
+              '(orderless))
+    	(setq-local completion-at-point-functions
+    				(list (cape-capf-super #'lsp-completion-at-point #'yasnippet-capf)))))
+#+end_src
+
+Also enable the Treemacs integration plugin:
+
+#+begin_src emacs-lisp
+    (use-package lsp-treemacs
+      :config
+      (lsp-treemacs-sync-mode 1)
+      :general
+      (start/leader-keys
+    	"l t s" 'lsp-treemacs-symbols
+    	"l t r" 'lsp-treemacs-references
+    	"l t i" 'lsp-treemacs-implementations
+    	"l t c" 'lsp-treemacs-call-hierarchy
+    	"l t t" 'lsp-treemacs-type-hierarchy))
+#+end_src
+
+Also enable UI plugin:
+
+#+begin_src emacs-lisp
+    (use-package lsp-ui
+      :hook (lsp-mode . lsp-ui-mode))
+#+end_src
+
 * Languages
+Modes and packages for writing specific languages. I use LSP mode as the primary way of generating completions /
+"IntelliSense"-like behavior, and to augment other language-specific packages. Each "main" language package here is
+responsible for enabling LSP mode on its own if it wants to.
 
 ** Markdown
 Everybody's favorite README language
@@ -721,6 +835,15 @@ Everybody's favorite README language
       (markdown-make-gfm-checkboxes-buttons t)
       (markdown-fontify-whole-heading-line t)
       (markdown-fontify-code-blocks-natively t))
+#+end_src
+
+** Go
+Program in Go with LSP support from ~gopls~
+
+#+begin_src emacs-lisp
+    (use-package go-mode
+      :mode "\\.go\\'"
+      :hook (go-mode . lsp-deferred))
 #+end_src
 
 * Misc

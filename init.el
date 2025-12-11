@@ -180,19 +180,6 @@
 	"w L" 'evil-window-move-far-right)
   )
 
-(use-package which-key
-  :ensure nil
-  :init (which-key-mode 1)
-  :custom
-  (which-key-side-window-location 'bottom)
-  (which-key-sort-order #'which-key-key-order-alpha)
-  (which-key-sort-uppercase-first nil)
-  (which-key-add-column-padding 1)
-  (which-key-min-display-lines 6)
-  (which-key-idle-delay 0.5)
-  (which-key-max-description-length 35)
-  (which-key-allow-imprecise-window-fit nil))
-
 (use-package org
   :ensure nil
   :custom
@@ -250,13 +237,12 @@
   (setq shackle-rules
         '(
           (("\\*Help\\*" helpful-mode) :align right :size 0.35 :select nil)
+		  (lsp-help-mode :align right :size 0.35 :select nil)
 
 		  ("\\*compilation\\*" :align below :size 0.25 :noselect t)
 		  (("\\*Flycheck errors\\*" flycheck-error-list-mode) :align below :size 0.25 :select t)
 		  (("\\*Warnings\\*" special-mode) :align below :size 0.2 :select nil)
 
-		  (("\\*Treemacs\\*" treemacs-mode) :align left :size 0.15 :select t)
-		  
 		  ("\\*Messages\\*" :align below :size 0.3 :select nil)
 		  ("\\*Backtrace\\*" :align below :size 0.3 :select t))
 		)
@@ -276,10 +262,9 @@
           "\\*Async Shell Command\\*"
           "\\*Flycheck errors\\*"
           "\\*helpful.*\\*"
-          "\\*Treemacs\\*"
           special-mode
-          treemacs-mode
           help-mode
+		  lsp-help-mode
           compilation-mode))
 
   :config
@@ -332,13 +317,44 @@
   :if (eq system-type 'darwin)
   :init (ns-auto-titlebar-mode +1))
 
+(use-package helpful
+  :general
+  (start/leader-keys
+    "h" '(:ignore t :wk "Help")
+    "h h" 'helpful-at-point
+    "h c" 'helpful-command
+    "h f" 'helpful-callable
+    "h k" 'helpful-key
+    "h v" 'helpful-variable))
+
+(use-package flycheck
+  :init (global-flycheck-mode))
+
+(use-package which-key
+  :ensure nil
+  :init (which-key-mode 1)
+  :custom
+  (which-key-side-window-location 'bottom)
+  (which-key-sort-order #'which-key-key-order-alpha)
+  (which-key-sort-uppercase-first nil)
+  (which-key-add-column-padding 1)
+  (which-key-min-display-lines 6)
+  (which-key-idle-delay 0.5)
+  (which-key-max-description-length 35)
+  (which-key-allow-imprecise-window-fit nil))
+
 (use-package project
   :ensure nil
   :defer t
   :init
   (setq project-list-file (file-name-concat
 						   (file-name-parent-directory user-init-file)
-						   "projects")))
+						   "projects"))
+  :general
+  (start/leader-keys
+	"p" '(:ignore t :wk "Projects")
+	"p p" 'project-switch-project
+	"p f" 'project-find-file))
 
 (use-package ibuffer-project
   :init
@@ -354,6 +370,7 @@
   (treemacs-follow-after-init t)
   (treemacs-sotring 'alphabetic-case-insensitive-asc)
   (treemacs-indent-guide-style 'line)
+  (treemacs-is-never-other-window t)
   :config
   (treemacs-project-follow-mode t)
   (treemacs-fringe-indicator-mode 'always)
@@ -371,12 +388,15 @@
 (use-package corfu
   :init
   (global-corfu-mode)
+  (corfu-popupinfo-mode)
+  (corfu-history-mode)
 
   :custom
   (corfu-cycle t)
   (corfu-auto t)
   (corfu-auto-prefix 2)
-  (corfu-popupinfo-enable t)
+  (corfu-auto-delay 0.1)
+  (corfu-separator ?\s)
   (corfu-popupinfo-delay 0.1)
   (corfu-preselect 'prompt)
   (completion-ignore-case t)
@@ -395,10 +415,7 @@
 (use-package cape
   :after corfu
   :init
-  (add-hook 'completion-at-point-functions #'cape-dabbrev)
-  (add-hook 'completion-at-point-functions #'cape-dict)
   (add-hook 'completion-at-point-functions #'cape-file)
-  (add-hook 'completion-at-point-functions #'cape-elisp-block)
   (add-hook 'completion-at-point-functions #'cape-keyword)
   :general
   (start/leader-keys
@@ -423,6 +440,17 @@
   :after marginalia
   :config (nerd-icons-completion-mode)
   :hook (marginalia-mode . nerd-icons-completion-marginalia-setup))
+
+(use-package yasnippet
+  :after cape
+  :config (yas-global-mode 1))
+
+(use-package yasnippet-capf
+  :after (cape lsp))
+
+(use-package yasnippet-snippets
+  :after yasnippet
+  :config (yas-reload-all))
 
 (use-package consult
   :custom
@@ -449,6 +477,35 @@
   (completion-styles '(orderless basic))
   (completion-category-overrides `((file (styles basic partial-completion)))))
 
+(use-package lsp-mode
+  :custom
+  (lsp-completion-provider :none)
+  (lsp-completion-enable t)
+  (lsp-completion-default-behavior :insert)
+  :hook
+  ((lsp-mode . lsp-enable-which-key-integration)
+   (lsp-completion-mode . my/lsp-mode-setup-completion))
+  :init
+  (defun my/lsp-mode-setup-completion ()
+    (setf (alist-get 'styles (alist-get 'lsp-capf completion-category-defaults))
+          '(orderless))
+	(setq-local completion-at-point-functions
+				(list (cape-capf-super #'lsp-completion-at-point #'yasnippet-capf)))))
+
+(use-package lsp-treemacs
+  :config
+  (lsp-treemacs-sync-mode 1)
+  :general
+  (start/leader-keys
+	"l t s" 'lsp-treemacs-symbols
+	"l t r" 'lsp-treemacs-references
+	"l t i" 'lsp-treemacs-implementations
+	"l t c" 'lsp-treemacs-call-hierarchy
+	"l t t" 'lsp-treemacs-type-hierarchy))
+
+(use-package lsp-ui
+  :hook (lsp-mode . lsp-ui-mode))
+
 (use-package markdown-mode
   :mode ("/README\\(?:\\.md\\)?\\'" . gfm-mode)
   :custom
@@ -457,6 +514,10 @@
   (markdown-make-gfm-checkboxes-buttons t)
   (markdown-fontify-whole-heading-line t)
   (markdown-fontify-code-blocks-natively t))
+
+(use-package go-mode
+  :mode "\\.go\\'"
+  :hook (go-mode . lsp-deferred))
 
 (use-package rainbow-delimiters
   :hook (prog-mode . rainbow-delimiters-mode))
