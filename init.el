@@ -3,6 +3,9 @@
 ;; The default is 800 kilobytes. Measured in bytes.
 (setq gc-cons-threshold (* 50 1000 1000))
 
+(add-to-list 'load-path (expand-file-name "lisp" user-emacs-directory))
+(require 'project-indicators)
+
 (defun start/org-babel-tangle-config ()
   "Automatically tangle our init.org config file"
   (interactive)
@@ -17,6 +20,39 @@
                          ("org" . "https://orgmode.org/elpa/")
                          ("elpa" . "https://elpa.gnu.org/packages/")
                          ("nongnu" . "https://elpa.nongnu.org/nongnu/")))
+
+(setq package-enable-at-startup nil ;; also set in early-init.el
+      straight-use-package-version 'straight
+      straight-use-package-by-default t)
+
+(defvar bootstrap-version)
+
+(let ((bootstrap-file
+       (expand-file-name
+        "straight/repos/straight.el/bootstrap.el"
+        (or (bound-and-true-p straight-base-dir)
+            user-emacs-directory)))
+      (bootstrap-version 7))
+  (unless (file-exists-p bootstrap-file)
+    (with-current-buffer
+		(url-retrieve-synchronously
+         "https://raw.githubusercontent.com/radian-software/straight.el/develop/install.el"
+         'silent 'inhibit-cookies)
+      (goto-char (point-max))
+      (eval-print-last-sexp)))
+  (load bootstrap-file nil 'nomessage))
+
+(defun straight/cleanup ()
+  "Prunes cache and build dirs, and purges unused repos"
+  (interactive)
+  (straight-prune-build)
+  (straight-remove-unused-repos t))
+
+(defun straight/update ()
+  "Pulls and updates all packages"
+  (interactive)
+  (straight-pull-recipe-repositories)
+  (straight-pull-all))
 
 (use-package emacs
   :custom
@@ -132,21 +168,28 @@
    :states '(normal)
    "s-/" 'comment-line)
 
+  (general-define-key
+   :states '(normal)
+   "g t" 'tab-line-switch-to-next-tab
+   "g T" 'tab-line-switch-to-prev-tab)
+
   (general-create-definer start/leader-keys
 	:states '(normal emacs)
 	:keymaps 'override
 	:prefix "SPC"
 	:global-prefix "SPC")
-
-  (general-create-definer start/mode-leader
-	:states '(normal emacs)
-	:keymaps 'override
-	:prefix "SPC m"
-	:global-prefix "SPC m")
   
   (start/leader-keys
-	"SPC" '(project-find-file :wk "Find file")
-	":" '(execute-extended-command :wk "M-x"))
+	"SPC" '(find-file :wk "Find file")
+	":" '(execute-extended-command :wk "M-x")
+	"TAB" '(treemacs-select-window :wk "Treemacs"))
+
+  (start/leader-keys
+	"~" '(:ignore t :wk "Straight")
+	"~ c" '(straight/cleanup :wk "Cleanup")
+	"~ u" '(straight/update :wk "Update")
+	"~ f" 'straight-freeze-versions
+	"~ t" `straight-thaw-versions)
   
   (start/leader-keys
 	"b" '(:ignore t :wk "Buffers")
@@ -155,14 +198,22 @@
   
   (start/leader-keys
 	"C" '(:ignore t :wk "Configs")
-	"C i" '((lambda () (interactive) (find-file "~/.config/emacs/init.el")) :wk "Edit init.el")
+	"C i" '((lambda () (interactive) (find-file "~/.config/emacs/init.org")) :wk "Edit init.org")
 	"C e" '((lambda () (interactive) (find-file "~/.config/emacs/early-init.el")) :wk "Edit early-init.el")
 	"C r" '((lambda () (interactive) (load-file "~/.config/emacs/init.el")) :wk "Reload init.el"))
+
+  (start/leader-keys
+	"l" '(:ignore t :wk "LSP"))
 
   (start/leader-keys
 	"q" '(:ignore t :wk "Quit")
 	"q r" '(restart-emacs :wk "Restart")
 	"q q" '(evil-quit-all :wk "Quit All"))
+
+  (start/leader-keys
+	"t" '(:ignore t :wk "Toggles")
+	"t f" 'toggle-frame-fullscreen
+	"t t" 'tab-line-mode)
   
   (start/leader-keys
 	"w" '(:ignore t :wk "Windows / Splits")
@@ -182,14 +233,26 @@
 
 (use-package org
   :ensure nil
+  :straight nil
   :custom
   (org-edit-src-content-indentation 4)
   (org-return-follows-link t)
-  :hook (org-mode . org-indent-mode))
+  :hook
+  ((org-mode . org-indent-mode)
+   (org-mode . my/set-literate-init-capfs))
+  :init
+  (defun my/set-literate-init-capfs ()
+	(setq-local completion-at-point-functions
+				(list #'cape-elisp-block #'cape-file #'cape-keyword #'cape-dabbrev))))
 
 (use-package toc-org
   :commands toc-org-enable
   :hook (org-mode . toc-org-mode))
+
+(use-package org-tempo
+  :ensure nil
+  :straight nil
+  :after org)
 
 (use-package org-superstar
   :after org
@@ -208,6 +271,8 @@
 (use-package doom-modeline
   :custom
   (doom-modeline-height 25)
+  (doom-modeline-total-line-number t)
+  (doom-modeline-project-name t)
   :hook (after-init . doom-modeline-mode))
 
 (use-package nerd-icons
@@ -230,7 +295,13 @@
   (dashboard-icon-type 'nerd-icons)
   (dashboard-set-heading-icons t)
   (dashboard-set-file-icons t)
+  :init
+  (setq dashboard-items '((recents . 10)
+						  (projects . 5)))
   :config (dashboard-setup-startup-hook))
+
+(use-package page-break-lines
+  :init (page-break-lines-mode))
 
 (use-package shackle
   :config
@@ -258,10 +329,12 @@
   (setq popper-reference-buffers
         '("\\*Messages\\*"
           "\\*Warnings\\*"
+		  "\\*Info\\*"
           "Output\\*$"
           "\\*Async Shell Command\\*"
           "\\*Flycheck errors\\*"
           "\\*helpful.*\\*"
+		  Info-mode
           special-mode
           help-mode
 		  lsp-help-mode
@@ -271,34 +344,7 @@
   (popper-mode +1)
   (popper-echo-mode +1)
 
-  (defun my/quit-popup-or-default ()
-    "Quit popup window if in a popup, otherwise run normal quit-window"
-    (interactive)
-    (if (and (bound-and-true-p popper-popup-status)
-                     (popper-popup-p (current-buffer)))
-            (popper-toggle)
-      (quit-window)))
-
-  (defun my/keyboard-quit-or-toggle-popup ()
-	"Toggle popup if in one, otherwise run keyboard-quit"
-	(interactive)
-	(if (and (bound-and-true-p popper-popup-status)
-			 (popper-popup-p (current-buffer)))
-		(popper-toggle)
-	  (keyboard-quit)))
-
   :general
-  ;; (general-define-key
-  ;;  :states '(motion)
-  ;;  :keymaps '(help-mode-map helpful-mode-map compilation-mode-map flycheck-error-list-mode-map)
-  ;;  "q" 'my/quit-popup-window-or-default)
-
-  ;; Fix: Make C-g work in popups
-  ;; (general-define-key
-  ;;  :states '(normal insert visual emacs)
-  ;;  :keymaps 'override
-  ;;  "C-g" 'my/keyboard-quit-or-toggle-popup)
-
   (start/leader-keys
 	"w q" 'popper-kill-latest-popup
 	"w p" 'popper-toggle
@@ -308,10 +354,16 @@
   :hook (after-init . solaire-global-mode))
 
 (use-package hl-line
+  :ensure nil
+  :straight nil
   :hook (after-init . global-hl-line-mode))
 
-(use-package page-break-lines
-  :init (page-break-lines-mode))
+;; MacOS UI improvements
+(setq
+ ns-use-native-fullscreen nil
+ mac-redisplay-dont-reset-vscroll t
+ mac-mouse-wheel-smooth-scroll nil
+ delete-by-moving-to-trash t)
 
 (use-package ns-auto-titlebar
   :if (eq system-type 'darwin)
@@ -338,18 +390,14 @@
   (which-key-sort-order #'which-key-key-order-alpha)
   (which-key-sort-uppercase-first nil)
   (which-key-add-column-padding 1)
-  (which-key-min-display-lines 6)
+  (which-key-min-display-lines 5)
   (which-key-idle-delay 0.5)
   (which-key-max-description-length 35)
   (which-key-allow-imprecise-window-fit nil))
 
 (use-package project
+  :straight nil
   :ensure nil
-  :defer t
-  :init
-  (setq project-list-file (file-name-concat
-						   (file-name-parent-directory user-init-file)
-						   "projects"))
   :general
   (start/leader-keys
 	"p" '(:ignore t :wk "Projects")
@@ -370,7 +418,7 @@
   (treemacs-follow-after-init t)
   (treemacs-sotring 'alphabetic-case-insensitive-asc)
   (treemacs-indent-guide-style 'line)
-  (treemacs-is-never-other-window t)
+  (treemacs-is-never-other-window nil)
   :config
   (treemacs-project-follow-mode t)
   (treemacs-fringe-indicator-mode 'always)
@@ -485,7 +533,7 @@
   :hook
   ((lsp-mode . lsp-enable-which-key-integration)
    (lsp-completion-mode . my/lsp-mode-setup-completion))
-  :init
+  :config
   (defun my/lsp-mode-setup-completion ()
     (setf (alist-get 'styles (alist-get 'lsp-capf completion-category-defaults))
           '(orderless))
@@ -515,15 +563,87 @@
   (markdown-fontify-whole-heading-line t)
   (markdown-fontify-code-blocks-natively t))
 
+(use-package emacs-lisp-mode
+  :straight nil
+  :ensure nil
+  :hook (emacs-lisp-mode . my/set-elisp-capfs)
+  :init
+  (defun my/set-elisp-capfs ()
+	(setq-local completion-at-point-functions 
+				(list #'cape-elisp-symbol #'cape-file #'cape-keyword #'cape-dabbrev))))
+
+(use-package highlight-quoted
+  :hook (emacs-lisp-mode . highlight-quoted-mode))
+
 (use-package go-mode
   :mode "\\.go\\'"
   :hook (go-mode . lsp-deferred))
+
+(use-package flycheck-golangci-lint
+  :hook (go-mode . flycheck-golangci-lint-setup))
+
+(use-package python
+  :ensure nil
+  :straight nil
+  :hook
+  ((python-base-mode . lsp-deferred)
+   (python-base-mode . (lambda () (highlight-indentation-mode -1))) ; using indent-bars-mode instead
+   (python-base-mode . indent-bars-mode)))
+
+(use-package elpy
+  :hook (python-mode . elpy-enable)
+  :general
+  (general-create-definer python/mode-leader
+	:states '(normal)
+	:keymaps 'python-base-mode-map
+	:prefix "SPC m")
+	
+  (python/mode-leader
+	"i" '(:ignore t :wk "Imports")))
+
+(use-package lsp-pyright
+  :custom (lsp-pyright-langserver-command "basedpyright"))
+
+(use-package pyimport
+  :commands (pyimport-remove-unused pyimport-insert-missing)
+  :general
+  (python/mode-leader
+	"i r" 'pyimport-remove-unused
+	"i m" 'pyimport-insert-missing))
+
+(use-package py-isort
+  :commands (py-isort-region py-isort-buffer)
+  :general
+  (python/mode-leader
+	"i s" 'py-isort-buffer))
+
+(use-package pet
+  :hook (python-base-mode . pet-mode))
+
+(use-package yaml-mode
+  :hook
+  ((yaml-mode . lsp-deferred)
+   (yaml-mode . indent-bars-mode)))
+
+(use-package ansible
+  :hook (yaml-mode . (lambda () (when (project/is-ansible-project) (ansible-mode 1)))))
 
 (use-package rainbow-delimiters
   :hook (prog-mode . rainbow-delimiters-mode))
 
 (use-package ws-butler
   :hook (prog-mode . ws-butler-mode))
+
+(use-package apheleia
+  :init (apheleia-global-mode +1)
+  :general
+  (start/leader-keys
+	"t a" '(apheleia-global-mode :wk "Toggle Apheleia")))
+
+(use-package indent-bars)
+
+(use-package envrc
+  :hook (after-init . envrc-global-mode))
 
 (setq gc-cons-threshold (* 2 1000 1000))
 

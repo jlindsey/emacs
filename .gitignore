@@ -1,8 +1,8 @@
-*
-!.gitignore
-!README.md
-!README.org
-!init.el
-!init.org
-!early-init.el
-!lisp/*
+.cache/
+.lsp-session*
+auto-save-list/
+eln-cache/
+elpa/
+history
+projects
+recentf

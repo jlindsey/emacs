@@ -15,9 +15,11 @@
   - [[#auto-tangle-hook][Auto-tangle Hook]]
   - [[#package-manager][Package manager]]
     - [[#repos][Repos]]
+    - [[#straight][Straight]]
+    - [[#helpers][Helpers]]
   - [[#emacs-defaults][Emacs Defaults]]
   - [[#savehist][Savehist]]
-  - [[#evil][Evil]]
+  - [[#evil-][Evil 😈]]
 - [[#keybinds][Keybinds]]
 - [[#org][Org]]
 - [[#ui][UI]]
@@ -30,6 +32,7 @@
     - [[#popper][Popper]]
     - [[#solaire][Solaire]]
   - [[#misc][Misc]]
+    - [[#macos][MacOS]]
 - [[#help][Help]]
   - [[#helpful][Helpful]]
   - [[#flycheck][Flycheck]]
@@ -47,7 +50,11 @@
 - [[#lsp][LSP]]
 - [[#languages][Languages]]
   - [[#markdown][Markdown]]
+  - [[#elisp][Elisp]]
   - [[#go][Go]]
+  - [[#python][Python]]
+  - [[#yaml][YAML]]
+    - [[#ansible][Ansible]]
 - [[#misc-1][Misc]]
 - [[#performance-and-finalize][Performance and Finalize]]
 
@@ -72,6 +79,12 @@ Make startup faster by reducing the frequency of garbage collection. This will b
     (setq gc-cons-threshold (* 50 1000 1000))
 #+end_src
 
+Update load path for personal libraries etc. We're not doing any ~autoload~ magic here at the moment.
+#+begin_src emacs-lisp
+    (add-to-list 'load-path (expand-file-name "lisp" user-emacs-directory))
+    (require 'project-indicators)
+#+end_src
+
 ** Auto-tangle Hook
 #+begin_src emacs-lisp
     (defun start/org-babel-tangle-config ()
@@ -86,17 +99,66 @@ Make startup faster by reducing the frequency of garbage collection. This will b
 #+end_src
 
 ** Package manager
-I use ~straight.el~, which is setup in ~early-init.el~. That config shouldn't really be changed. It's configured to
-disable ~package.el~ and use normal ~use-package~ forms (without needing ~:straight~ keys).
+I use ~straight.el~ as the package manager.
 
 *** Repos
-Even though we don't use ~package.el~ and straight ignores this, it's useful to set so you can still do ~M-x install-package~.
+Set repo lists
 
 #+begin_src emacs-lisp
     (setq package-archives '(("melpa" . "https://melpa.org/packages/")
                              ("org" . "https://orgmode.org/elpa/")
                              ("elpa" . "https://elpa.gnu.org/packages/")
                              ("nongnu" . "https://elpa.nongnu.org/nongnu/")))
+#+end_src
+
+*** Straight
+I use ~straight.el~ instead of ~package.el~ for the ability to do rollbacks and easily use Github et al sources instead
+of just the repos. It's set up to use normal ~use-package~ forms; the one difference to remember is that if you don't
+want a given package installed (that is: you want to use ~use-package~ as a way to ~require~ built-in packages like Org
+with the ability to also set hooks etc) then ~:ensure nil~ must be used with ~:straight nil~.
+
+In ~early-init.el~ we set ~package-enable-at-startup nil~. It is the only thing in that file. We also set that variable
+here, mainly in order to make it easier to run Emacs in batch mode to update / freeze / thaw the packages in a script.
+
+#+begin_src emacs-lisp
+    (setq package-enable-at-startup nil ;; also set in early-init.el
+          straight-use-package-version 'straight
+          straight-use-package-by-default t)
+
+    (defvar bootstrap-version)
+
+    (let ((bootstrap-file
+           (expand-file-name
+            "straight/repos/straight.el/bootstrap.el"
+            (or (bound-and-true-p straight-base-dir)
+                user-emacs-directory)))
+          (bootstrap-version 7))
+      (unless (file-exists-p bootstrap-file)
+        (with-current-buffer
+    		(url-retrieve-synchronously
+             "https://raw.githubusercontent.com/radian-software/straight.el/develop/install.el"
+             'silent 'inhibit-cookies)
+          (goto-char (point-max))
+          (eval-print-last-sexp)))
+      (load bootstrap-file nil 'nomessage))
+#+end_src
+
+
+*** Helpers
+Define a couple helpers here to manage Straight. Bound later on.
+
+#+begin_src emacs-lisp
+    (defun straight/cleanup ()
+      "Prunes cache and build dirs, and purges unused repos"
+      (interactive)
+      (straight-prune-build)
+      (straight-remove-unused-repos t))
+
+    (defun straight/update ()
+      "Pulls and updates all packages"
+      (interactive)
+      (straight-pull-recipe-repositories)
+      (straight-pull-all))
 #+end_src
 
 ** Emacs Defaults
@@ -163,8 +225,9 @@ used and enabled. By default, saves to ~$HOME/.config/emacs/history~.
       :init (savehist-mode))
 #+end_src
 
-** Evil
+** Evil 😈
 Setup Evil mode and associated plugins.
+
 #+begin_src emacs-lisp
     (use-package evil
       :init
@@ -234,8 +297,8 @@ This config uses ~general~ for keybind management because:
 + It supports using ~use-package~ to set up keys at the point where they are most relevent
           
 Given that second point, only keys which aren't associated with a particular package should be set here. Things like
-window split management and movement, quitting/restarting, etc. Package-specific bindings should use the ~:general~ form
-in ~use-package~.
+window split management and movement, quitting/restarting, etc. Top-level "categories" are also set, although they may
+be empty here and added to later on. Package-specific bindings should use the ~:general~ form in ~use-package~.
 
 #+begin_src emacs-lisp
     (use-package general
@@ -252,21 +315,28 @@ in ~use-package~.
        :states '(normal)
        "s-/" 'comment-line)
 
+      (general-define-key
+       :states '(normal)
+       "g t" 'tab-line-switch-to-next-tab
+       "g T" 'tab-line-switch-to-prev-tab)
+
       (general-create-definer start/leader-keys
     	:states '(normal emacs)
     	:keymaps 'override
     	:prefix "SPC"
     	:global-prefix "SPC")
-
-      (general-create-definer start/mode-leader
-    	:states '(normal emacs)
-    	:keymaps 'override
-    	:prefix "SPC m"
-    	:global-prefix "SPC m")
       
       (start/leader-keys
-    	"SPC" '(project-find-file :wk "Find file")
-    	":" '(execute-extended-command :wk "M-x"))
+    	"SPC" '(find-file :wk "Find file")
+    	":" '(execute-extended-command :wk "M-x")
+    	"TAB" '(treemacs-select-window :wk "Treemacs"))
+
+      (start/leader-keys
+    	"~" '(:ignore t :wk "Straight")
+    	"~ c" '(straight/cleanup :wk "Cleanup")
+    	"~ u" '(straight/update :wk "Update")
+    	"~ f" 'straight-freeze-versions
+    	"~ t" `straight-thaw-versions)
       
       (start/leader-keys
     	"b" '(:ignore t :wk "Buffers")
@@ -275,14 +345,22 @@ in ~use-package~.
       
       (start/leader-keys
     	"C" '(:ignore t :wk "Configs")
-    	"C i" '((lambda () (interactive) (find-file "~/.config/emacs/init.el")) :wk "Edit init.el")
+    	"C i" '((lambda () (interactive) (find-file "~/.config/emacs/init.org")) :wk "Edit init.org")
     	"C e" '((lambda () (interactive) (find-file "~/.config/emacs/early-init.el")) :wk "Edit early-init.el")
     	"C r" '((lambda () (interactive) (load-file "~/.config/emacs/init.el")) :wk "Reload init.el"))
+
+      (start/leader-keys
+    	"l" '(:ignore t :wk "LSP"))
 
       (start/leader-keys
     	"q" '(:ignore t :wk "Quit")
     	"q r" '(restart-emacs :wk "Restart")
     	"q q" '(evil-quit-all :wk "Quit All"))
+
+      (start/leader-keys
+    	"t" '(:ignore t :wk "Toggles")
+    	"t f" 'toggle-frame-fullscreen
+    	"t t" 'tab-line-mode)
       
       (start/leader-keys
     	"w" '(:ignore t :wk "Windows / Splits")
@@ -305,21 +383,44 @@ in ~use-package~.
 I don't use Org mode much except for this config, so just set up a couple simple packages and configs here.
 
 #+begin_src emacs-lisp
-(use-package org
-  :ensure nil
-  :custom
-  (org-edit-src-content-indentation 4)
-  (org-return-follows-link t)
-  :hook (org-mode . org-indent-mode))
-
-(use-package toc-org
-  :commands toc-org-enable
-  :hook (org-mode . toc-org-mode))
-
-(use-package org-superstar
-  :after org
-  :hook (org-mode . org-superstar-mode))
+    (use-package org
+      :ensure nil
+      :straight nil
+      :custom
+      (org-edit-src-content-indentation 4)
+      (org-return-follows-link t)
+      :hook
+      ((org-mode . org-indent-mode)
+       (org-mode . my/set-literate-init-capfs))
+      :init
+      (defun my/set-literate-init-capfs ()
+    	(setq-local completion-at-point-functions
+    				(list #'cape-elisp-block #'cape-file #'cape-keyword #'cape-dabbrev))))
 #+end_src
+
+Automatically manage the table of contents at the beginning of this file based on headings:
+#+begin_src emacs-lisp
+    (use-package toc-org
+      :commands toc-org-enable
+      :hook (org-mode . toc-org-mode))
+#+end_src
+
+A built-in Emacs Org package that provides org-mode templates. For our purposes here, it lets you type ~<s TAB~ to make
+a source code block.
+#+begin_src emacs-lisp
+    (use-package org-tempo
+      :ensure nil
+      :straight nil
+      :after org)
+#+end_src
+
+Make it look a bit prettier:
+#+begin_src emacs-lisp
+    (use-package org-superstar
+      :after org
+      :hook (org-mode . org-superstar-mode))
+#+end_src
+
 
 * UI
 Various UI customizations like theme, modeline, etc
@@ -347,6 +448,8 @@ with other packages like Flycheck and LSP.
     (use-package doom-modeline
       :custom
       (doom-modeline-height 25)
+      (doom-modeline-total-line-number t)
+      (doom-modeline-project-name t)
       :hook (after-init . doom-modeline-mode))
 #+end_src
 
@@ -380,7 +483,16 @@ A nice startup screen showing recent files, projects, etc.
       (dashboard-icon-type 'nerd-icons)
       (dashboard-set-heading-icons t)
       (dashboard-set-file-icons t)
+      :init
+      (setq dashboard-items '((recents . 10)
+    						  (projects . 5)))
       :config (dashboard-setup-startup-hook))
+#+end_src
+
+Required for the section dividers:
+#+begin_src emacs-lisp
+    (use-package page-break-lines
+      :init (page-break-lines-mode))
 #+end_src
 
 ** Popup Management
@@ -423,10 +535,12 @@ toggleable. You can cycle through these kinds of windows, list them all, group t
       (setq popper-reference-buffers
             '("\\*Messages\\*"
               "\\*Warnings\\*"
+    		  "\\*Info\\*"
               "Output\\*$"
               "\\*Async Shell Command\\*"
               "\\*Flycheck errors\\*"
               "\\*helpful.*\\*"
+    		  Info-mode
               special-mode
               help-mode
     		  lsp-help-mode
@@ -436,34 +550,7 @@ toggleable. You can cycle through these kinds of windows, list them all, group t
       (popper-mode +1)
       (popper-echo-mode +1)
 
-      (defun my/quit-popup-or-default ()
-        "Quit popup window if in a popup, otherwise run normal quit-window"
-        (interactive)
-        (if (and (bound-and-true-p popper-popup-status)
-                         (popper-popup-p (current-buffer)))
-                (popper-toggle)
-          (quit-window)))
-
-      (defun my/keyboard-quit-or-toggle-popup ()
-    	"Toggle popup if in one, otherwise run keyboard-quit"
-    	(interactive)
-    	(if (and (bound-and-true-p popper-popup-status)
-    			 (popper-popup-p (current-buffer)))
-    		(popper-toggle)
-    	  (keyboard-quit)))
-
       :general
-      ;; (general-define-key
-      ;;  :states '(motion)
-      ;;  :keymaps '(help-mode-map helpful-mode-map compilation-mode-map flycheck-error-list-mode-map)
-      ;;  "q" 'my/quit-popup-window-or-default)
-
-      ;; Fix: Make C-g work in popups
-      ;; (general-define-key
-      ;;  :states '(normal insert visual emacs)
-      ;;  :keymaps 'override
-      ;;  "C-g" 'my/keyboard-quit-or-toggle-popup)
-
       (start/leader-keys
     	"w q" 'popper-kill-latest-popup
     	"w p" 'popper-toggle
@@ -483,13 +570,21 @@ Several minor UI packages that don't need their own TOC heading.
 Highlight the current line:
 #+begin_src emacs-lisp
     (use-package hl-line
+      :ensure nil
+      :straight nil
       :hook (after-init . global-hl-line-mode))
 #+end_src
 
-Display page breaks as <hr>-style lines (used in Dashboard):
+*** MacOS
+Set a few variables for better experience on Mac
 #+begin_src emacs-lisp
-    (use-package page-break-lines
-      :init (page-break-lines-mode))
+    ;; MacOS UI improvements
+    (setq
+     ns-use-native-fullscreen nil
+     mac-redisplay-dont-reset-vscroll t
+     mac-mouse-wheel-smooth-scroll nil
+     delete-by-moving-to-trash t)
+
 #+end_src
 
 On Mac, make the title bar match the current theme:
@@ -498,6 +593,8 @@ On Mac, make the title bar match the current theme:
       :if (eq system-type 'darwin)
       :init (ns-auto-titlebar-mode +1))
 #+end_src
+
+
 
 * Help
 Several packages for use in getting help or otherwise displaying documentation
@@ -539,7 +636,7 @@ when you start a chord or leader sequence.
       (which-key-sort-order #'which-key-key-order-alpha)
       (which-key-sort-uppercase-first nil)
       (which-key-add-column-padding 1)
-      (which-key-min-display-lines 6)
+      (which-key-min-display-lines 5)
       (which-key-idle-delay 0.5)
       (which-key-max-description-length 35)
       (which-key-allow-imprecise-window-fit nil))
@@ -551,12 +648,8 @@ For now, use ~project.el~ for project management, with a few plugins for interop
 
 #+begin_src emacs-lisp
     (use-package project
+      :straight nil
       :ensure nil
-      :defer t
-      :init
-      (setq project-list-file (file-name-concat
-    						   (file-name-parent-directory user-init-file)
-    						   "projects"))
       :general
       (start/leader-keys
     	"p" '(:ignore t :wk "Projects")
@@ -588,7 +681,7 @@ definitions and only works while the Treemacs buffer is open; not a great UX.
       (treemacs-follow-after-init t)
       (treemacs-sotring 'alphabetic-case-insensitive-asc)
       (treemacs-indent-guide-style 'line)
-      (treemacs-is-never-other-window t)
+      (treemacs-is-never-other-window nil)
       :config
       (treemacs-project-follow-mode t)
       (treemacs-fringe-indicator-mode 'always)
@@ -788,7 +881,7 @@ Note that ~(lsp-mode)~ isn't called here. I prefer to have the individual langua
       :hook
       ((lsp-mode . lsp-enable-which-key-integration)
        (lsp-completion-mode . my/lsp-mode-setup-completion))
-      :init
+      :config
       (defun my/lsp-mode-setup-completion ()
         (setf (alist-get 'styles (alist-get 'lsp-capf completion-category-defaults))
               '(orderless))
@@ -824,7 +917,7 @@ Modes and packages for writing specific languages. I use LSP mode as the primary
 responsible for enabling LSP mode on its own if it wants to.
 
 ** Markdown
-Everybody's favorite README language
+Everybody's favorite README language. Default to Github-flavored markdown mode.
 
 #+begin_src emacs-lisp
     (use-package markdown-mode
@@ -837,8 +930,29 @@ Everybody's favorite README language
       (markdown-fontify-code-blocks-natively t))
 #+end_src
 
+** Elisp
+Emacs lisp mode hooks
+
+#+begin_src emacs-lisp
+    (use-package emacs-lisp-mode
+      :straight nil
+      :ensure nil
+      :hook (emacs-lisp-mode . my/set-elisp-capfs)
+      :init
+      (defun my/set-elisp-capfs ()
+    	(setq-local completion-at-point-functions 
+    				(list #'cape-elisp-symbol #'cape-file #'cape-keyword #'cape-dabbrev))))
+#+end_src
+
+Highlight quotes in elisp files
+
+#+begin_src emacs-lisp
+    (use-package highlight-quoted
+      :hook (emacs-lisp-mode . highlight-quoted-mode))
+#+end_src
+
 ** Go
-Program in Go with LSP support from ~gopls~
+Program in Go with LSP support from ~gopls~:
 
 #+begin_src emacs-lisp
     (use-package go-mode
@@ -846,6 +960,89 @@ Program in Go with LSP support from ~gopls~
       :hook (go-mode . lsp-deferred))
 #+end_src
 
+Use ~golangci-lint~ for static checks:
+
+#+begin_src emacs-lisp
+    (use-package flycheck-golangci-lint
+      :hook (go-mode . flycheck-golangci-lint-setup))
+#+end_src
+
+** Python
+Set up ~python-mode~ hooks and LSP integration (nb. this is setting up the Emacs built-in Python mode, not
+~python-mode.el~, which I don't use).
+
+#+begin_src emacs-lisp
+    (use-package python
+      :ensure nil
+      :straight nil
+      :hook
+      ((python-base-mode . lsp-deferred)
+       (python-base-mode . (lambda () (highlight-indentation-mode -1))) ; using indent-bars-mode instead
+       (python-base-mode . indent-bars-mode)))
+#+end_src
+
+Using elpy for the primary Python mode, alongside LSPs
+
+#+begin_src emacs-lisp
+    (use-package elpy
+      :hook (python-mode . elpy-enable)
+      :general
+      (general-create-definer python/mode-leader
+    	:states '(normal)
+    	:keymaps 'python-base-mode-map
+    	:prefix "SPC m")
+    	
+      (python/mode-leader
+    	"i" '(:ignore t :wk "Imports")))
+#+end_src
+
+Using "basedpyright" for the primary LSP client for its speed and extra features
+
+#+begin_src emacs-lisp
+    (use-package lsp-pyright
+      :custom (lsp-pyright-langserver-command "basedpyright"))
+#+end_src
+
+Import management:
+
+#+begin_src emacs-lisp
+    (use-package pyimport
+      :commands (pyimport-remove-unused pyimport-insert-missing)
+      :general
+      (python/mode-leader
+    	"i r" 'pyimport-remove-unused
+    	"i m" 'pyimport-insert-missing))
+
+    (use-package py-isort
+      :commands (py-isort-region py-isort-buffer)
+      :general
+      (python/mode-leader
+    	"i s" 'py-isort-buffer))
+#+end_src
+
+Detect and select the correct Python version / venv:
+#+begin_src emacs-lisp
+    (use-package pet
+      :hook (python-base-mode . pet-mode))
+#+end_src
+
+** YAML
+Generic YAML file highlighting + LSP support
+
+#+begin_src emacs-lisp
+    (use-package yaml-mode
+      :hook
+      ((yaml-mode . lsp-deferred)
+       (yaml-mode . indent-bars-mode)))
+#+end_src
+
+*** Ansible
+Specific packages for Ansible support
+
+#+begin_src emacs-lisp
+    (use-package ansible
+      :hook (yaml-mode . (lambda () (when (project/is-ansible-project) (ansible-mode 1)))))
+#+end_src
 * Misc
 Various other minor packages that don't fit in the other sections.
 
@@ -861,6 +1058,25 @@ Automatically trim whitespace from edited lines:
       :hook (prog-mode . ws-butler-mode))
 #+end_src
 
+Automatically format a buffer on save:
+#+begin_src emacs-lisp
+    (use-package apheleia
+      :init (apheleia-global-mode +1)
+      :general
+      (start/leader-keys
+    	"t a" '(apheleia-global-mode :wk "Toggle Apheleia")))
+#+end_src
+
+Indentation lines used in several language modes:
+#+begin_src emacs-lisp
+    (use-package indent-bars)
+#+end_src
+
+Automatically load Direnv into buffer-local config:
+#+begin_src emacs-lisp
+    (use-package envrc
+      :hook (after-init . envrc-global-mode))
+#+end_src
 
 * Performance and Finalize
 Make GC pauses faster by decreasing the threshold (undoing what we did at the very beginning).
