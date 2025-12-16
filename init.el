@@ -554,6 +554,13 @@
 (use-package lsp-ui
   :hook (lsp-mode . lsp-ui-mode))
 
+(use-package treesit-auto
+  :custom
+  (treesit-auto-install 'prompt)
+  :config
+  (treesit-auto-add-to-auto-mode-alist 'all)
+  (global-treesit-auto-mode))
+
 (use-package markdown-mode
   :mode ("/README\\(?:\\.md\\)?\\'" . gfm-mode)
   :custom
@@ -576,11 +583,9 @@
   :hook (emacs-lisp-mode . highlight-quoted-mode))
 
 (use-package go-mode
+  :init (setq go-ts-mode-hook go-mode-hook)
   :mode "\\.go\\'"
   :hook (go-mode . lsp-deferred))
-
-(use-package flycheck-golangci-lint
-  :hook (go-mode . flycheck-golangci-lint-setup))
 
 (use-package python
   :ensure nil
@@ -621,6 +626,7 @@
   :hook (python-base-mode . pet-mode))
 
 (use-package yaml-mode
+  :init (setq yaml-ts-mode-hook yaml-mode-hook)
   :hook
   ((yaml-mode . lsp-deferred)
    (yaml-mode . indent-bars-mode)))
@@ -635,12 +641,18 @@
   :hook (prog-mode . ws-butler-mode))
 
 (use-package apheleia
-  :init (apheleia-global-mode +1)
+  :hook (prog-mode . (lambda () apheleia-global-mode +1))
   :general
   (start/leader-keys
 	"t a" '(apheleia-global-mode :wk "Toggle Apheleia")))
 
-(use-package indent-bars)
+(use-package indent-bars
+  :custom
+  (indent-bars-display-on-blank-lines nil)
+  (indent-bars-color '(default :face-bg t :blend 0.3))
+  (indent-bars-pattern ".")
+  (indent-bars-width-frac 0.25)
+  (indent-bars-pad-frac 0.1))
 
 (use-package envrc
   :hook (after-init . envrc-global-mode))

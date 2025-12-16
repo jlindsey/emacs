@@ -48,6 +48,7 @@
   - [[#consult][Consult]]
   - [[#orderless][Orderless]]
 - [[#lsp][LSP]]
+- [[#treesitter][Treesitter]]
 - [[#languages][Languages]]
   - [[#markdown][Markdown]]
   - [[#elisp][Elisp]]
@@ -911,6 +912,23 @@ Also enable UI plugin:
       :hook (lsp-mode . lsp-ui-mode))
 #+end_src
 
+* Treesitter
+Use ~tree-sitter~ for better and faster syntax parsing and highlighting. Works well with ~indent-bars-mode~.
+
+#+begin_src emacs-lisp
+    (use-package treesit-auto
+      :custom
+      (treesit-auto-install 'prompt)
+      :config
+      (treesit-auto-add-to-auto-mode-alist 'all)
+      (global-treesit-auto-mode))
+#+end_src
+
+NOTE: This package automatically sets ~auto-mode-alist~, remapping major modes to their Treesitter versions (eg
+~python-mode~ -> ~python-ts-mode~). For some, like Python, this means you need to use the shared ~python-base-mode~ for
+hooks etc. Others don't have this shared base mode and so to avoid breaking hooks you need to shadow the hook
+definition. I do this in the base major mode package's ~:init~ section; see Go below for an example.
+
 * Languages
 Modes and packages for writing specific languages. I use LSP mode as the primary way of generating completions /
 "IntelliSense"-like behavior, and to augment other language-specific packages. Each "main" language package here is
@@ -956,13 +974,18 @@ Program in Go with LSP support from ~gopls~:
 
 #+begin_src emacs-lisp
     (use-package go-mode
+      :init (setq go-ts-mode-hook go-mode-hook)
       :mode "\\.go\\'"
       :hook (go-mode . lsp-deferred))
 #+end_src
 
 Use ~golangci-lint~ for static checks:
 
-#+begin_src emacs-lisp
+#+begin_notes
+12-15-2025: Disable until https://github.com/weijiangan/flycheck-golangci-lint/issues/20 is fixed
+#+end_notes
+
+#+begin_src emacs-lisp :tangle no
     (use-package flycheck-golangci-lint
       :hook (go-mode . flycheck-golangci-lint-setup))
 #+end_src
@@ -1031,18 +1054,21 @@ Generic YAML file highlighting + LSP support
 
 #+begin_src emacs-lisp
     (use-package yaml-mode
+      :init (setq yaml-ts-mode-hook yaml-mode-hook)
       :hook
       ((yaml-mode . lsp-deferred)
        (yaml-mode . indent-bars-mode)))
 #+end_src
 
 *** Ansible
-Specific packages for Ansible support
+Specific packages for Ansible support, uses a custom function to determine whether we're in an Ansible project. Note
+that this automatically sets lsp-mode to use ~ansible-ls~ and prompt to install it if missing.
 
 #+begin_src emacs-lisp
     (use-package ansible
       :hook (yaml-mode . (lambda () (when (project/is-ansible-project) (ansible-mode 1)))))
 #+end_src
+
 * Misc
 Various other minor packages that don't fit in the other sections.
 
@@ -1061,15 +1087,22 @@ Automatically trim whitespace from edited lines:
 Automatically format a buffer on save:
 #+begin_src emacs-lisp
     (use-package apheleia
-      :init (apheleia-global-mode +1)
+      :hook (prog-mode . (lambda () apheleia-global-mode +1))
       :general
       (start/leader-keys
     	"t a" '(apheleia-global-mode :wk "Toggle Apheleia")))
 #+end_src
 
-Indentation lines used in several language modes:
+Indentation lines used in several language modes. Note that it isn't enabled here; it should be added to the hooks of
+whatever other modes want it.
 #+begin_src emacs-lisp
-    (use-package indent-bars)
+    (use-package indent-bars
+      :custom
+      (indent-bars-display-on-blank-lines nil)
+      (indent-bars-color '(default :face-bg t :blend 0.3))
+      (indent-bars-pattern ".")
+      (indent-bars-width-frac 0.25)
+      (indent-bars-pad-frac 0.1))
 #+end_src
 
 Automatically load Direnv into buffer-local config:
