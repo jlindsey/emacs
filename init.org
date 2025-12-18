@@ -35,7 +35,6 @@
     - [[#macos][MacOS]]
 - [[#help][Help]]
   - [[#helpful][Helpful]]
-  - [[#flycheck][Flycheck]]
   - [[#which-key][Which-key]]
 - [[#project-management][Project Management]]
   - [[#treemacs][Treemacs]]
@@ -44,18 +43,19 @@
   - [[#cape][Cape]]
   - [[#vertico][Vertico]]
     - [[#marginalia][Marginalia]]
-  - [[#yasnippet][Yasnippet]]
   - [[#consult][Consult]]
   - [[#orderless][Orderless]]
-- [[#lsp][LSP]]
-- [[#treesitter][Treesitter]]
-- [[#languages][Languages]]
-  - [[#markdown][Markdown]]
-  - [[#elisp][Elisp]]
-  - [[#go][Go]]
-  - [[#python][Python]]
-  - [[#yaml][YAML]]
-    - [[#ansible][Ansible]]
+- [[#development][Development]]
+  - [[#lsp][LSP]]
+  - [[#yasnippet][Yasnippet]]
+  - [[#treesitter][Treesitter]]
+  - [[#flycheck][Flycheck]]
+  - [[#languages][Languages]]
+    - [[#markdown][Markdown]]
+    - [[#elisp][Elisp]]
+    - [[#go][Go]]
+    - [[#python][Python]]
+    - [[#yaml][YAML]]
 - [[#misc-1][Misc]]
 - [[#performance-and-finalize][Performance and Finalize]]
 
@@ -617,14 +617,6 @@ buffer UI.
         "h v" 'helpful-variable))
 #+end_src
 
-** Flycheck
-An alternative to the Emacs-native Flybuild that's a bit more full-featured and has good integration with lsp-mode.
-
-#+begin_src emacs-lisp
-(use-package flycheck
-  :init (global-flycheck-mode))
-#+end_src
-
 ** Which-key
 A built-in package (as of 30) that displays a list of keybindings along the bottom in the minibuffer after a short delay
 when you start a chord or leader sequence.
@@ -803,29 +795,6 @@ Also adds nerd-icons to suggestions based on their type:
       :hook (marginalia-mode . nerd-icons-completion-marginalia-setup))
 #+end_src
 
-** Yasnippet
-Framework for creating and inserting templated snippets as completions.
-
-#+begin_src emacs-lisp
-    (use-package yasnippet
-      :after cape
-      :config (yas-global-mode 1))
-#+end_src
-
-The CAPF functionality is a separate package:
-
-#+begin_src emacs-lisp
-    (use-package yasnippet-capf
-      :after (cape lsp))
-#+end_src
-
-Install the omnibus library of different premade snippets:
-#+begin_src emacs-lisp
-    (use-package yasnippet-snippets
-      :after yasnippet
-      :config (yas-reload-all))
-#+end_src
-
 ** Consult
 Provides a series of ~completing-read~ backends; in other words, it is to Vertico what Cape is to Corfu. Also adds
 descriptions compatible with Marginalia. It has a lot of different functions for things like looking up buffers, listing
@@ -865,7 +834,10 @@ space-separated components, and then candidates are matched against them in any 
       (completion-category-overrides `((file (styles basic partial-completion)))))
 #+end_src
 
-* LSP
+* Development
+Packages and settingss for using Emacs as an IDE (or at least a text editor with some nice coding functions).
+
+** LSP
 I used to use Eglot but switched to LSP mode for two specific reasons:
 + I want the ability to run multiple servers per buffer / file type (eg. running both ~pyright~ and ~ruff~ in Python)
 + LSP mode has better integration with several things like Treemacs
@@ -914,7 +886,30 @@ Also enable UI plugin:
       :hook (lsp-mode . lsp-ui-mode))
 #+end_src
 
-* Treesitter
+** Yasnippet
+Framework for creating and inserting templated snippets as completions.
+
+#+begin_src emacs-lisp
+    (use-package yasnippet
+      :after cape
+      :config (yas-global-mode 1))
+#+end_src
+
+The CAPF functionality is a separate package:
+
+#+begin_src emacs-lisp
+    (use-package yasnippet-capf
+      :after (cape lsp))
+#+end_src
+
+Install the omnibus library of different premade snippets:
+#+begin_src emacs-lisp
+    (use-package yasnippet-snippets
+      :after yasnippet
+      :config (yas-reload-all))
+#+end_src
+
+** Treesitter
 Use ~tree-sitter~ for better and faster syntax parsing and highlighting. Works well with ~indent-bars-mode~.
 
 #+begin_src emacs-lisp
@@ -931,12 +926,20 @@ NOTE: This package automatically sets ~auto-mode-alist~, remapping major modes t
 hooks etc. Others don't have this shared base mode and so to avoid breaking hooks you need to shadow the hook
 definition. I do this in the base major mode package's ~:init~ section; see Go below for an example.
 
-* Languages
+** Flycheck
+An alternative to the Emacs-native Flybuild that's a bit more full-featured and has good integration with lsp-mode.
+
+#+begin_src emacs-lisp
+(use-package flycheck
+  :init (global-flycheck-mode))
+#+end_src
+
+** Languages
 Modes and packages for writing specific languages. I use LSP mode as the primary way of generating completions /
 "IntelliSense"-like behavior, and to augment other language-specific packages. Each "main" language package here is
 responsible for enabling LSP mode on its own if it wants to.
 
-** Markdown
+*** Markdown
 Everybody's favorite README language. Default to Github-flavored markdown mode.
 
 #+begin_src emacs-lisp
@@ -950,7 +953,7 @@ Everybody's favorite README language. Default to Github-flavored markdown mode.
       (markdown-fontify-code-blocks-natively t))
 #+end_src
 
-** Elisp
+*** Elisp
 Emacs lisp mode hooks
 
 #+begin_src emacs-lisp
@@ -971,7 +974,7 @@ Highlight quotes in elisp files
       :hook (emacs-lisp-mode . highlight-quoted-mode))
 #+end_src
 
-** Go
+*** Go
 Program in Go with LSP support from ~gopls~:
 
 #+begin_src emacs-lisp
@@ -992,7 +995,7 @@ Use ~golangci-lint~ for static checks:
       :hook (go-mode . flycheck-golangci-lint-setup))
 #+end_src
 
-** Python
+*** Python
 Set up ~python-mode~ hooks and LSP integration (nb. this is setting up the Emacs built-in Python mode, not
 ~python-mode.el~, which I don't use).
 
@@ -1052,7 +1055,7 @@ Detect and select the correct Python version / venv:
       :hook (python-base-mode . pet-mode))
 #+end_src
 
-** YAML
+*** YAML
 Generic YAML file highlighting + LSP support
 
 #+begin_src emacs-lisp
@@ -1064,7 +1067,7 @@ Generic YAML file highlighting + LSP support
        (yaml-mode . indent-bars-mode)))
 #+end_src
 
-*** Ansible
+**** Ansible
 Specific packages for Ansible support, uses a custom function to determine whether we're in an Ansible project. Note
 that this automatically sets lsp-mode to use ~ansible-ls~ and prompt to install it if missing.
 

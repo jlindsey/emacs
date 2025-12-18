@@ -380,9 +380,6 @@
     "h k" 'helpful-key
     "h v" 'helpful-variable))
 
-(use-package flycheck
-  :init (global-flycheck-mode))
-
 (use-package which-key
   :ensure nil
   :straight nil
@@ -491,17 +488,6 @@
   :config (nerd-icons-completion-mode)
   :hook (marginalia-mode . nerd-icons-completion-marginalia-setup))
 
-(use-package yasnippet
-  :after cape
-  :config (yas-global-mode 1))
-
-(use-package yasnippet-capf
-  :after (cape lsp))
-
-(use-package yasnippet-snippets
-  :after yasnippet
-  :config (yas-reload-all))
-
 (use-package consult
   :custom
   (register-preview-delay 0.3)
@@ -556,12 +542,26 @@
 (use-package lsp-ui
   :hook (lsp-mode . lsp-ui-mode))
 
+(use-package yasnippet
+  :after cape
+  :config (yas-global-mode 1))
+
+(use-package yasnippet-capf
+  :after (cape lsp))
+
+(use-package yasnippet-snippets
+  :after yasnippet
+  :config (yas-reload-all))
+
 (use-package treesit-auto
   :custom
   (treesit-auto-install 'prompt)
   :config
   (treesit-auto-add-to-auto-mode-alist 'all)
   (global-treesit-auto-mode))
+
+(use-package flycheck
+  :init (global-flycheck-mode))
 
 (use-package markdown-mode
   :mode ("/README\\(?:\\.md\\)?\\'" . gfm-mode)
