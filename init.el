@@ -105,6 +105,7 @@
 
 (use-package savehist
   :ensure nil
+  :straight nil
   :init (savehist-mode))
 
 (use-package evil
@@ -384,6 +385,7 @@
 
 (use-package which-key
   :ensure nil
+  :straight nil
   :init (which-key-mode 1)
   :custom
   (which-key-side-window-location 'bottom)
@@ -583,8 +585,8 @@
   :hook (emacs-lisp-mode . highlight-quoted-mode))
 
 (use-package go-mode
-  :init (setq go-ts-mode-hook go-mode-hook)
   :mode "\\.go\\'"
+  :config (setq go-ts-mode-hook go-mode-hook)
   :hook (go-mode . lsp-deferred))
 
 (use-package python
@@ -593,7 +595,8 @@
   :hook
   ((python-base-mode . lsp-deferred)
    (python-base-mode . (lambda () (highlight-indentation-mode -1))) ; using indent-bars-mode instead
-   (python-base-mode . indent-bars-mode)))
+   (python-base-mode . indent-bars-mode)
+   (python-base-mode . (lambda () (require 'python-helpers)))))
 
 (use-package elpy
   :hook (python-mode . elpy-enable)
@@ -626,7 +629,8 @@
   :hook (python-base-mode . pet-mode))
 
 (use-package yaml-mode
-  :init (setq yaml-ts-mode-hook yaml-mode-hook)
+  :config
+  (setq yaml-ts-mode-hook yaml-mode-hook)
   :hook
   ((yaml-mode . lsp-deferred)
    (yaml-mode . indent-bars-mode)))

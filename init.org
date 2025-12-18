@@ -223,6 +223,7 @@ used and enabled. By default, saves to ~$HOME/.config/emacs/history~.
 #+begin_src emacs-lisp
     (use-package savehist
       :ensure nil
+      :straight nil
       :init (savehist-mode))
 #+end_src
 
@@ -631,6 +632,7 @@ when you start a chord or leader sequence.
 #+begin_src emacs-lisp
     (use-package which-key
       :ensure nil
+      :straight nil
       :init (which-key-mode 1)
       :custom
       (which-key-side-window-location 'bottom)
@@ -974,8 +976,8 @@ Program in Go with LSP support from ~gopls~:
 
 #+begin_src emacs-lisp
     (use-package go-mode
-      :init (setq go-ts-mode-hook go-mode-hook)
       :mode "\\.go\\'"
+      :config (setq go-ts-mode-hook go-mode-hook)
       :hook (go-mode . lsp-deferred))
 #+end_src
 
@@ -1001,7 +1003,8 @@ Set up ~python-mode~ hooks and LSP integration (nb. this is setting up the Emacs
       :hook
       ((python-base-mode . lsp-deferred)
        (python-base-mode . (lambda () (highlight-indentation-mode -1))) ; using indent-bars-mode instead
-       (python-base-mode . indent-bars-mode)))
+       (python-base-mode . indent-bars-mode)
+       (python-base-mode . (lambda () (require 'python-helpers)))))
 #+end_src
 
 Using elpy for the primary Python mode, alongside LSPs
@@ -1054,7 +1057,8 @@ Generic YAML file highlighting + LSP support
 
 #+begin_src emacs-lisp
     (use-package yaml-mode
-      :init (setq yaml-ts-mode-hook yaml-mode-hook)
+      :config
+      (setq yaml-ts-mode-hook yaml-mode-hook)
       :hook
       ((yaml-mode . lsp-deferred)
        (yaml-mode . indent-bars-mode)))
